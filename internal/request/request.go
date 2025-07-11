@@ -5,17 +5,21 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"github.com/trolioSFG/http-go/internal/headers"
+
 )
 
 type parserState int
 const (
 	Initialized parserState = iota
 	Done
+	ParsingHeaders
 )
 
 type Request struct {
 	RequestLine RequestLine
 	pState parserState
+	Headers headers.Headers
 }
 
 type RequestLine struct {
@@ -31,6 +35,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	rq := &Request{
 		pState: Initialized,
+		Headers: headers.NewHeaders(),
 	}
 
 	for rq.pState != Done {
@@ -48,9 +53,18 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		if err != nil {
 			if err == io.EOF {
+				// if rq.pState != Done {
+				/** TODO:
+				if bytesRead > 0 {
+					fmt.Printf("Buffer: %v\n", buf)
+					fmt.Printf("%#v\n", rq)
+					return nil, fmt.Errorf("Incomplete request: in state %d read %d bytes at EOF", rq.pState, bytesRead)
+				}
+				**/
 				rq.pState = Done
 				break
 			}
+
 			return nil, err
 		}
 		bytesRead += numRead
@@ -61,6 +75,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		// fmt.Printf("bytesRead: %d\n", bytesRead)
+		if rq.pState == Done {
+			fmt.Printf("Finished bytesRead: %d bytesParsed: %d\n", bytesRead, numParsed)
+		}
 
 		// HERE!
 		copy(buf, buf[numParsed:])
@@ -105,12 +122,26 @@ func parseRequestLine(data []byte) (int, []string, error) {
 
 	parts[2] = version[1]
 
-	return len(data), parts, nil
+	return len(lines[0]) + 2, parts, nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
 	if r.pState == Done {
 		return 0, fmt.Errorf("Error: trying to read data in done state")
+	}
+
+	if r.pState == ParsingHeaders {
+		bytesHdr, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+
+		if done {
+			fmt.Printf("Done!")
+			r.pState = Done
+		}
+
+		return bytesHdr, nil
 	}
 
 	if r.pState != Initialized {
@@ -129,7 +160,7 @@ func (r *Request) parse(data []byte) (int, error) {
 	r.RequestLine.HttpVersion = parts[2]
 	r.RequestLine.RequestTarget = parts[1]
 	r.RequestLine.Method = parts[0]
-	r.pState = Done
+	r.pState = ParsingHeaders
 
 	return n, nil
 }

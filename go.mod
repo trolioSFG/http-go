@@ -1,4 +1,4 @@
-module http-go
+module github.com/trolioSFG/http-go
 
 go 1.23.2
 

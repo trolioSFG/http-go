@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 //	"os"
-	"io"
-	"strings"
+//	"io"
+//	"strings"
 	"net"
+	"github.com/trolioSFG/http-go/internal/request"
 )
 
 func main() {
@@ -25,54 +26,18 @@ func main() {
 		}
 
 		fmt.Println("Connection accepted")
-		c := getLinesChannel(conn)
-
-		for line := range c {
-			fmt.Printf("%s\n", line)
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			fmt.Printf("Request error: %v\n", err)
+			continue
 		}
+
+		fmt.Printf("Request line:\n")
+		fmt.Printf("- Method: %v\n", req.RequestLine.Method)
+		fmt.Printf("- Target: %v\n", req.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %v\n", req.RequestLine.HttpVersion)
 
 		fmt.Println("Connection closed")
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	c := make(chan string)
-
-	go func() {
-
-		buf := make([]byte, 8)
-		var currentLine string
-
-		for {
-			n, err := f.Read(buf)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				fmt.Printf("Error reading: %v\n", err)
-				break
-			}
-			parts := strings.Split(string(buf[:n]), "\n")
-			for i := 0; i < len(parts) - 1 && len(parts) > 1; i++ {
-				currentLine = currentLine + parts[i]
-				// fmt.Printf("read: %s\n", currentLine)
-				c <- currentLine
-				currentLine = ""
-			}
-
-			currentLine = currentLine + parts[len(parts)-1]
-
-			// fmt.Printf("read: %s\n", buf[:n])
-		}
-
-		if currentLine != "" {
-			c <- currentLine
-		}
-
-		f.Close()
-		close(c)
-	}()
-
-	return c
 }
 
