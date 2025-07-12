@@ -14,13 +14,17 @@ func NewHeaders() Headers {
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
+	if len(data) == 0 {
+		return 0, false, fmt.Errorf("Empty data")
+	}
+
 	lines := strings.Split(string(data), "\r\n")
 	if len(lines) == 1 && lines[0] == string(data) {
 		return 0, false, nil
 	}
 
 	if lines[0] == "" {
-		fmt.Printf("End of Header found!\n")
+		// fmt.Printf("End of Header found!\n")
 		return 2, true, nil
 	}
 

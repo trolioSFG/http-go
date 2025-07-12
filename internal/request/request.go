@@ -32,6 +32,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	buf := make([]byte, 8, 8)
 	bytesRead := 0
+	bytesParsed := 0
 
 	rq := &Request{
 		pState: Initialized,
@@ -46,42 +47,32 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		numRead, err := reader.Read(buf[bytesRead:])
-		/***
-		fmt.Printf("nread: %d bytesRead: %d\nBuf:\n%v\n",
-			numRead, bytesRead, string(buf))
-		*****/
 
 		if err != nil {
 			if err == io.EOF {
-				// if rq.pState != Done {
-				/** TODO:
-				if bytesRead > 0 {
-					fmt.Printf("Buffer: %v\n", buf)
-					fmt.Printf("%#v\n", rq)
-					return nil, fmt.Errorf("Incomplete request: in state %d read %d bytes at EOF", rq.pState, bytesRead)
+				if numRead == 0 {
+					if bytesRead == 0 {
+						return nil, fmt.Errorf("Incomplete request")
+					} else if bytesParsed == 0 {
+						return nil, fmt.Errorf("Incomplete request")
+					}
 				}
-				**/
-				rq.pState = Done
-				break
+				
+			} else {
+				return nil, err
 			}
-
-			return nil, err
 		}
 		bytesRead += numRead
-		numParsed, err := rq.parse(buf[:bytesRead])
+		bytesParsed, err = rq.parse(buf[:bytesRead])
 		if err != nil {
 			fmt.Printf("Error parsing: %v\n", err)
 			return nil, err
 		}
 
-		// fmt.Printf("bytesRead: %d\n", bytesRead)
-		if rq.pState == Done {
-			fmt.Printf("Finished bytesRead: %d bytesParsed: %d\n", bytesRead, numParsed)
-		}
 
 		// HERE!
-		copy(buf, buf[numParsed:])
-		bytesRead -= numParsed
+		copy(buf, buf[bytesParsed:])
+		bytesRead -= bytesParsed
 	}
 
 	return rq, nil
@@ -114,8 +105,6 @@ func parseRequestLine(data []byte) (int, []string, error) {
 		return 0, nil, fmt.Errorf("Bad version")
 	}
 
-	// fmt.Printf("Version: %v\n", version)
-
 	if version[1] != "1.1" {
 		return 0, nil, fmt.Errorf("Unsupported version")
 	}
@@ -137,7 +126,6 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			fmt.Printf("Done!")
 			r.pState = Done
 		}
 

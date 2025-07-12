@@ -57,7 +57,7 @@ func TestRequestLineParse(t *testing.T) {
 
 	reader = &chunkReader{
 		data:            "GET /coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
-		numBytesPerRead: 1,
+		numBytesPerRead: 1024,
 	}
 	r, err = RequestFromReader(reader)
 	require.NoError(t, err)
@@ -128,14 +128,19 @@ func TestRequestHeaders(t *testing.T) {
 	assert.Equal(t, r.Headers["set-person"], "jim, jane")
 
 	// Test: Missing End of headers
-	// TODO: Should return err (EOF)
-	/***
 	reader = &chunkReader{
 		data: "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0",
 		numBytesPerRead: 3,
 	}
 	r, err = RequestFromReader(reader)
 	require.Error(t, err)
-	**/
+
+	// Test: Missing End of headers, no separator
+	reader = &chunkReader{
+		data: "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
 }
 

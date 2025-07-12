@@ -4,7 +4,7 @@ import (
 	"testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"fmt"
+//	"fmt"
 )
 
 func TestHeaders(t *testing.T) {
@@ -43,7 +43,7 @@ func TestHeaders(t *testing.T) {
 	done = false
 	for !done {
 		n, done, err = headers.Parse(data)
-		fmt.Printf("Bytes parsed: %d Done: %v Headers:\n%#v\n", n, done, headers)
+		t.Logf("Bytes parsed: %d Done: %v Headers:\n%#v\n", n, done, headers)
 		copy(data, data[n:])
 	}
 
