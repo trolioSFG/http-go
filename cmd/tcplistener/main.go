@@ -41,6 +41,10 @@ func main() {
 			fmt.Printf("- %v: %v\n", k, v)
 		}
 
+		fmt.Printf("Body:\n")
+		fmt.Printf("%s\n", string(req.Body))
+
+
 		fmt.Println("Connection closed")
 	}
 }

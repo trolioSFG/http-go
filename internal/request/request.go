@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 	"github.com/trolioSFG/http-go/internal/headers"
-
+	"strconv"
 )
 
 type parserState int
@@ -14,12 +14,14 @@ const (
 	Initialized parserState = iota
 	Done
 	ParsingHeaders
+	ParsingBody
 )
 
 type Request struct {
 	RequestLine RequestLine
 	pState parserState
 	Headers headers.Headers
+	Body []byte
 }
 
 type RequestLine struct {
@@ -37,6 +39,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	rq := &Request{
 		pState: Initialized,
 		Headers: headers.NewHeaders(),
+		Body: []byte{},
 	}
 
 	for rq.pState != Done {
@@ -51,10 +54,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		if err != nil {
 			if err == io.EOF {
 				if numRead == 0 {
-					if bytesRead == 0 {
-						return nil, fmt.Errorf("Incomplete request")
-					} else if bytesParsed == 0 {
-						return nil, fmt.Errorf("Incomplete request")
+					if rq.pState == ParsingBody {
+						contentLength, err := strconv.Atoi(rq.Headers["content-length"])
+						if err != nil {
+							return nil, fmt.Errorf("Invalid content-length header: %v", err)
+						}
+
+						if len(rq.Body) == contentLength {
+							return rq, nil
+						} else {
+							return nil, fmt.Errorf("Body length mismatch with header")
+						}
+					} else {
+						if bytesRead == 0 {
+							return nil, fmt.Errorf("Incomplete request")
+						} else if bytesParsed == 0 {
+							return nil, fmt.Errorf("Incomplete request")
+						}
 					}
 				}
 				
@@ -126,11 +142,22 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			r.pState = Done
+			if _, body := r.Headers["content-length"]; !body {
+				r.pState = Done
+			} else {
+				r.pState = ParsingBody
+			}
 		}
 
 		return bytesHdr, nil
 	}
+
+	if r.pState == ParsingBody {
+		// TIL: Variadic
+		r.Body = append(r.Body, data...)
+		return len(data), nil
+	}
+
 
 	if r.pState != Initialized {
 		return 0, fmt.Errorf("Error: unknown state")
