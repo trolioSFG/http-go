@@ -4,7 +4,7 @@ import (
 //	"bytes"
 //	"io"
 //	"bufio"
-//	"fmt"
+	"fmt"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -101,41 +101,20 @@ func (s *Server) handle(conn net.Conn) {
 	// Buf: bytes.NewBuffer([]byte{}),
 	w := &response.Writer{
 		Buf: conn,
-		State: response.StateBlank,
+		State: response.StateStatus,
 	}
 	// Parse the request from the connection
-	req, _ := request.RequestFromReader(conn)
-
-	/**
-	Handler takes care of req, even if error (req == nil)
+	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		WriteError(conn, &HandlerError{
-			Status: response.StatusBadRequest,
-			Msg: []byte(err.Error()),
-		})
+		w.WriteStatusLine(response.StatusBadRequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
-	}
+	}		
 
-	// log.Printf(req.RequestLine.String())
-	**/
 
 	s.handler(w, req)
-	// fmt.Printf(string(w.Buf.Bytes()))
-	// conn.Write(w.Buf.Bytes())
-	
-/**********
-	Handler's responsability
-	if hndErr.Status != response.StatusOK {
-		WriteError(conn, hndErr)
-		return
-	}
-
-	response.WriteStatusLine(conn, response.StatusOK)
-	response.WriteHeaders(conn, response.GetDefaultHeaders(w.Len()))
-	conn.Write([]byte("\r\n"))
-	conn.Write(w.Bytes())
-******/
-
 }
 
 
