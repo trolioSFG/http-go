@@ -54,6 +54,12 @@ func fooHandler(w *response.Writer, req *request.Request) {
 	}
 
 
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/video") {
+		videoHandler(w, req)
+		return
+	}
+
+
 	if req.RequestLine.RequestTarget == "/yourproblem" {
 		w.WriteStatusLine(response.StatusBadRequest)
 		msg := []byte(`<html><head><title>400 BadRequest</title></head>
@@ -92,6 +98,30 @@ func fooHandler(w *response.Writer, req *request.Request) {
 	return
 }
 
+
+func videoHandler(w *response.Writer, req *request.Request) {
+
+	hdr := headers.NewHeaders()
+	file, err := os.ReadFile("assets/vim.mp4")
+	if err != nil {
+		w.WriteStatusLine(response.StatusError)
+		msg := []byte(fmt.Sprintf(`<html><head><title>500 Internal Server Error</title></head>
+<body><h1>Internal Server Error</h1><p>Okay, you know what? This one is on me.</p>
+<p>Error: %v</p></body></html>`, err.Error()))
+		hdr["Content-Type"] = "text/html"
+		hdr["Content-Length"] = strconv.Itoa(len(msg))
+		w.WriteHeaders(hdr)
+		w.WriteBody(msg)
+		return
+	}
+
+	w.WriteStatusLine(response.StatusOK)
+	hdr["Content-Type"] = "video/mp4"
+	w.WriteHeaders(hdr)
+	w.WriteBody(file)
+
+	return
+}
 
 func ChunkedHandler(w *response.Writer, r *request.Request) {
 	url := "https://httpbin.org/" + strings.TrimPrefix(r.RequestLine.RequestTarget, "/httpbin/")
