@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 //	"io"
+	"net/http"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"strconv"
 	"syscall"
 	"github.com/trolioSFG/http-go/internal/server"
@@ -44,6 +47,10 @@ func fooHandler(w *response.Writer, req *request.Request) {
 		return
 	}
 
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+		ChunkedHandler(w, req)
+		return
+	}
 
 
 	if req.RequestLine.RequestTarget == "/yourproblem" {
@@ -82,6 +89,62 @@ func fooHandler(w *response.Writer, req *request.Request) {
 	w.WriteBody(msg)
 
 	return
+}
+
+
+func ChunkedHandler(w *response.Writer, r *request.Request) {
+	url := "https://httpbin.org/" + strings.TrimPrefix(r.RequestLine.RequestTarget, "/httpbin/")
+	rsp, err := http.Get(url)
+	if err != nil || rsp.StatusCode > 200 {
+		httpbinErr := err
+		err := w.WriteStatusLine(response.StatusBadRequest)
+		if err != nil {
+			return
+		}
+
+		str := fmt.Sprintf(`<html><head><title>400 Bad Request</title></head>
+		<body><h1>Bad Request</h1><p>Your request honestly kinda sucked.</p><p>HTTPBIN err: %v</p>
+		<p>HTTPBIN StatusCode: %d</p></body></html>`, httpbinErr, rsp.StatusCode)
+		msg := []byte(str)
+
+		hdr := headers.NewHeaders()
+		hdr["Content-Type"] = "text/html"
+		hdr["Content-Length"] = strconv.Itoa(len(msg))
+
+		err = w.WriteHeaders(hdr)
+		if err != nil {
+			return
+		}
+		_, err = w.WriteBody(msg)
+		if err != nil {
+			return
+		}
+
+		return
+	}
+
+	defer rsp.Body.Close()
+	w.WriteStatusLine(response.StatusOK)
+	hdr := headers.NewHeaders()
+	hdr["Content-Type"] = rsp.Header["Content-Type"][0]
+	hdr["Transfer-Encoding"] ="chunked"
+	w.WriteHeaders(hdr)
+
+	buf := make([]byte, 20)
+	finished := false
+	bytesRead := 0
+	for !finished {
+		bytesRead, err = rsp.Body.Read(buf)
+		if bytesRead > 0 {
+			w.WriteChunkedBody(buf[:bytesRead])
+		} else {
+			finished = true
+		}
+	}
+
+	w.WriteChunkedBodyDone()
+	
+
 }
 
 func main() {

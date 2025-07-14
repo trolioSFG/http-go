@@ -51,7 +51,6 @@ func WriteError(w io.Writer, herr *HandlerError) error {
 }
 **/
 
-
 func Serve(port int, handler Handler) (*Server, error) {
 	// Alternative
 	// .. fmt.Sprintf(":%d", port)
