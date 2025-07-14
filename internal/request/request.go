@@ -3,6 +3,7 @@ package request
 import (
 	"io"
 	"fmt"
+//	"log"
 	"strings"
 	"unicode"
 	"github.com/trolioSFG/http-go/internal/headers"
@@ -22,12 +23,17 @@ type Request struct {
 	pState parserState
 	Headers headers.Headers
 	Body []byte
+	bodyLengthRead int
 }
 
 type RequestLine struct {
 	HttpVersion string
 	RequestTarget string
 	Method string
+}
+
+func (rql RequestLine) String() string {
+	return rql.Method + " " + rql.RequestTarget + " " + "HTTP/" + rql.HttpVersion
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
@@ -47,48 +53,41 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			aux := make([]byte, 2 * len(buf))
 			copy(aux, buf)
 			buf = aux
+			fmt.Printf("Buffer extended to %d\n", len(buf))
 		}
 
+
 		numRead, err := reader.Read(buf[bytesRead:])
+		fmt.Printf("Read %d bytes\n", numRead)
 
 		if err != nil {
 			if err == io.EOF {
-				if numRead == 0 {
-					if rq.pState == ParsingBody {
-						contentLength, err := strconv.Atoi(rq.Headers["content-length"])
-						if err != nil {
-							return nil, fmt.Errorf("Invalid content-length header: %v", err)
-						}
-
-						if len(rq.Body) == contentLength {
-							return rq, nil
-						} else {
-							return nil, fmt.Errorf("Body length mismatch with header")
-						}
-					} else {
-						if bytesRead == 0 {
-							return nil, fmt.Errorf("Incomplete request")
-						} else if bytesParsed == 0 {
-							return nil, fmt.Errorf("Incomplete request")
-						}
-					}
-				}
-				
-			} else {
-				return nil, err
+				return nil, fmt.Errorf("Incomplete request")
 			}
+			return nil, err
 		}
+
 		bytesRead += numRead
 		bytesParsed, err = rq.parse(buf[:bytesRead])
 		if err != nil {
 			fmt.Printf("Error parsing: %v\n", err)
 			return nil, err
 		}
-
-
-		// HERE!
 		copy(buf, buf[bytesParsed:])
 		bytesRead -= bytesParsed
+
+		for rq.pState != Done && bytesParsed > 0 {
+			bytesParsed, err = rq.parse(buf[:bytesRead])
+			if err != nil {
+				fmt.Printf("Error parsing: %v\n", err)
+				return nil, err
+			}
+			// HERE!
+			fmt.Printf("PRE bytesRead: %d bytesParsed: %d\nBuffer:%v\n", bytesRead, bytesParsed, buf[:bytesRead])
+			copy(buf, buf[bytesParsed:])
+			bytesRead -= bytesParsed
+			fmt.Printf("bytesRead: %d bytesParsed: %d\nBuffer:%v\n", bytesRead, bytesParsed, buf[:bytesRead])
+		}
 	}
 
 	return rq, nil
@@ -127,6 +126,7 @@ func parseRequestLine(data []byte) (int, []string, error) {
 
 	parts[2] = version[1]
 
+	fmt.Printf("Finished request line\n")
 	return len(lines[0]) + 2, parts, nil
 }
 
@@ -142,19 +142,37 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			if _, body := r.Headers["content-length"]; !body {
-				r.pState = Done
-			} else {
-				r.pState = ParsingBody
-			}
+			fmt.Printf("Finished parsing headers\n")
+			r.pState = ParsingBody
+			// r.pState = Done
 		}
 
 		return bytesHdr, nil
 	}
 
 	if r.pState == ParsingBody {
+		clStr, body := r.Headers["content-length"]
+		if !body {
+			fmt.Printf("No content-length header\n")
+			r.pState = Done
+			return len(data), nil
+		}
+		contentLen, err := strconv.Atoi(clStr)
+		if err != nil {
+			return 0, fmt.Errorf("malformed Content-Length: %s", err)
+		}
 		// TIL: Variadic
 		r.Body = append(r.Body, data...)
+		r.bodyLengthRead += len(data)
+
+		if r.bodyLengthRead > contentLen {
+			return 0, fmt.Errorf("Content-Length too large")
+		}
+
+		if r.bodyLengthRead == contentLen {
+			r.pState = Done
+		}
+
 		return len(data), nil
 	}
 

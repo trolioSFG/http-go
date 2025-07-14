@@ -15,7 +15,7 @@ func NewHeaders() Headers {
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	if len(data) == 0 {
-		return 0, false, fmt.Errorf("Empty data")
+		return 0, false, nil
 	}
 
 	lines := strings.Split(string(data), "\r\n")
