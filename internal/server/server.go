@@ -1,9 +1,10 @@
 package server
 
 import (
-	"bytes"
-	"io"
+//	"bytes"
+//	"io"
 //	"bufio"
+//	"fmt"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -19,8 +20,9 @@ type Server struct {
 	handler Handler
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
+/**
 type HandlerError struct {
 	Status response.StatusCode
 	Msg []byte
@@ -47,6 +49,8 @@ func WriteError(w io.Writer, herr *HandlerError) error {
 
 	return nil
 }
+**/
+
 
 func Serve(port int, handler Handler) (*Server, error) {
 	// Alternative
@@ -94,8 +98,16 @@ func (s *Server) handle(conn net.Conn) {
 
 	defer conn.Close()
 
+	// Buf: bytes.NewBuffer([]byte{}),
+	w := &response.Writer{
+		Buf: conn,
+		State: response.StateBlank,
+	}
 	// Parse the request from the connection
-	req, err := request.RequestFromReader(conn)
+	req, _ := request.RequestFromReader(conn)
+
+	/**
+	Handler takes care of req, even if error (req == nil)
 	if err != nil {
 		WriteError(conn, &HandlerError{
 			Status: response.StatusBadRequest,
@@ -105,10 +117,14 @@ func (s *Server) handle(conn net.Conn) {
 	}
 
 	// log.Printf(req.RequestLine.String())
+	**/
 
-	w := bytes.NewBuffer([]byte{})
-	hndErr := s.handler(w, req)
-
+	s.handler(w, req)
+	// fmt.Printf(string(w.Buf.Bytes()))
+	// conn.Write(w.Buf.Bytes())
+	
+/**********
+	Handler's responsability
 	if hndErr.Status != response.StatusOK {
 		WriteError(conn, hndErr)
 		return
@@ -118,6 +134,8 @@ func (s *Server) handle(conn net.Conn) {
 	response.WriteHeaders(conn, response.GetDefaultHeaders(w.Len()))
 	conn.Write([]byte("\r\n"))
 	conn.Write(w.Bytes())
+******/
+
 }
 
 
