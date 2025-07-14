@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 //	"io"
 	"net/http"
@@ -128,23 +129,29 @@ func ChunkedHandler(w *response.Writer, r *request.Request) {
 	hdr := headers.NewHeaders()
 	hdr["Content-Type"] = rsp.Header["Content-Type"][0]
 	hdr["Transfer-Encoding"] ="chunked"
+	hdr["Trailer"] = "X-Content-Sha256, X-Content-Length"
 	w.WriteHeaders(hdr)
 
 	buf := make([]byte, 20)
+	fullBuffer := []byte{}
 	finished := false
 	bytesRead := 0
+	total := 0
 	for !finished {
 		bytesRead, err = rsp.Body.Read(buf)
 		if bytesRead > 0 {
 			w.WriteChunkedBody(buf[:bytesRead])
+			fullBuffer = append(fullBuffer, buf[:bytesRead]...)
+			total += bytesRead
 		} else {
 			finished = true
 		}
 	}
 
 	w.WriteChunkedBodyDone()
-	
-
+	w.WriteBody([]byte(fmt.Sprintf("X-Content-Sha256: %x\r\n", sha256.Sum256(fullBuffer))))
+	w.WriteBody([]byte(fmt.Sprintf("X-Content-Length: %d\r\n", total)))
+	w.WriteBody([]byte("\r\n"))
 }
 
 func main() {
